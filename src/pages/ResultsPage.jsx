@@ -1,4 +1,3 @@
-// src/pages/ResultsPage.jsx
 import React, { useState, useEffect, useContext } from 'react';
 import { LanguageContext } from '../context/LanguageContext';
 
@@ -18,12 +17,19 @@ const ResultsPage = ({ onNavigate }) => {
       whenToSeekHelp: "When to Seek Medical Help Immediately",
       findProviders: "Find Healthcare Providers",
       getSecondOpinion: "Chat for More Info",
+      chatForInfo: "Chat for More Info",
       disclaimer: "Important Medical Disclaimer",
       backToSymptoms: "Add More Symptoms",
       probability: "Match",
       analysisBy: "Analysis powered by AI",
       patientInfo: "Your Information",
-      newAnalysis: "Start New Analysis"
+      newAnalysis: "Start New Analysis",
+      ageGroup: "Age Group",
+      gender: "Gender",
+      location: "Location",
+      severity: "Severity",
+      duration: "Duration",
+      symptoms: "Symptoms"
     },
     hi: {
       title: "आपका AI स्वास्थ्य विश्लेषण",
@@ -33,16 +39,22 @@ const ResultsPage = ({ onNavigate }) => {
       whenToSeekHelp: "तत्काल चिकित्सा सहायता कब लें",
       findProviders: "स्वास्थ्य सेवा प्रदाता खोजें",
       getSecondOpinion: "अधिक जानकारी के लिए चैट करें",
+      chatForInfo: "अधिक जानकारी के लिए चैट करें",
       disclaimer: "महत्वपूर्ण चिकित्सा अस्वीकरण",
       backToSymptoms: "और लक्षण जोड़ें",
       probability: "मिलान",
       analysisBy: "AI द्वारा संचालित विश्लेषण",
       patientInfo: "आपकी जानकारी",
-      newAnalysis: "नया विश्लेषण शुरू करें"
+      newAnalysis: "नया विश्लेषण शुरू करें",
+      ageGroup: "आयु समूह",
+      gender: "लिंग",
+      location: "स्थान",
+      severity: "गंभीरता",
+      duration: "अवधि",
+      symptoms: "लक्षण"
     }
   };
 
-  // Safe function to get text with fallback
   const getText = (key) => {
     const currentText = text[currentLanguage] || text.en;
     return currentText[key] || text.en[key] || key;
@@ -50,18 +62,26 @@ const ResultsPage = ({ onNavigate }) => {
 
   useEffect(() => {
     const storedResults = localStorage.getItem('analysisResults');
-    console.log(storedResults);
     const storedPatientData = localStorage.getItem('patientData');
+
+    console.log('Loading data - Results:', storedResults);
+    console.log('Loading data - Patient:', storedPatientData);
 
     if (storedResults && storedPatientData) {
       try {
-        setAnalysisResults(JSON.parse(storedResults));
-        setPatientData(JSON.parse(storedPatientData));
+        const results = JSON.parse(storedResults);
+        const patient = JSON.parse(storedPatientData);
+        
+        console.log('Parsed patient data:', patient);
+        
+        setAnalysisResults(results);
+        setPatientData(patient);
       } catch (error) {
         console.error('Error parsing stored data:', error);
         setAnalysisResults(getDefaultResults());
       }
     } else {
+      console.warn('Missing stored data');
       setAnalysisResults(getDefaultResults());
     }
     setLoading(false);
@@ -116,6 +136,25 @@ const ResultsPage = ({ onNavigate }) => {
     return urgencyTexts[currentLanguage]?.[level] || urgencyTexts.en[level];
   };
 
+  // FIXED: Helper to format gender display
+  const formatGender = (gender) => {
+    const genderMap = {
+      en: {
+        male: 'Male',
+        female: 'Female',
+        other: 'Other',
+        'prefer-not-to-say': 'Prefer not to say'
+      },
+      hi: {
+        male: 'पुरुष',
+        female: 'महिला',
+        other: 'अन्य',
+        'prefer-not-to-say': 'नहीं बताना चाहते'
+      }
+    };
+    return genderMap[currentLanguage]?.[gender] || genderMap.en[gender] || gender;
+  };
+
   if (loading) {
     return (
       <div style={{
@@ -126,7 +165,10 @@ const ResultsPage = ({ onNavigate }) => {
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         color: 'white'
       }}>
-        <div>Loading results...</div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⏳</div>
+          <div>Loading results...</div>
+        </div>
       </div>
     );
   }
@@ -179,24 +221,176 @@ const ResultsPage = ({ onNavigate }) => {
           </div>
         </div>
 
-        {/* Patient Summary Card */}
+        {/* FIXED: Enhanced Patient Summary Card with all demographic info */}
         {patientData && (
           <div style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            backgroundColor: 'rgba(255, 255, 255, 0.15)',
             backdropFilter: 'blur(10px)',
             borderRadius: '15px',
-            padding: '1rem',
+            padding: '1.5rem',
             marginBottom: '2rem',
             border: '1px solid rgba(255, 255, 255, 0.2)'
           }}>
-            <h3 style={{ marginBottom: '0.5rem', fontSize: '1.1rem' }}>
-              {getText('patientInfo')}
+            <h3 style={{ 
+              marginBottom: '1rem', 
+              fontSize: '1.2rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}>
+              👤 {getText('patientInfo')}
             </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', fontSize: '0.9rem' }}>
-              {patientData.age && <span>👤 Age: {patientData.age}</span>}
-              {patientData.symptoms && <span>🔍 Symptoms: {patientData.symptoms.substring(0, 50)}...</span>}
-              {patientData.severity && <span>⚡ Severity: {patientData.severity}/10</span>}
-              {patientData.duration && <span>⏰ Duration: {patientData.duration}</span>}
+            
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+              gap: '1rem'
+            }}>
+              {/* Age Group */}
+              {patientData.ageGroupLabel && (
+                <div style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  padding: '0.8rem',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '1.2rem' }}>🎂</span>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                      {getText('ageGroup')}
+                    </div>
+                    <div style={{ fontWeight: 'bold' }}>
+                      {patientData.ageGroupLabel}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Gender */}
+              {patientData.gender && (
+                <div style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  padding: '0.8rem',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '1.2rem' }}>
+                    {patientData.gender === 'male' ? '👨' : 
+                     patientData.gender === 'female' ? '👩' : '👤'}
+                  </span>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                      {getText('gender')}
+                    </div>
+                    <div style={{ fontWeight: 'bold' }}>
+                      {formatGender(patientData.gender)}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Location */}
+              {patientData.location && (
+                <div style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  padding: '0.8rem',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '1.2rem' }}>📍</span>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                      {getText('location')}
+                    </div>
+                    <div style={{ fontWeight: 'bold' }}>
+                      {patientData.location}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Severity */}
+              {patientData.severity && (
+                <div style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  padding: '0.8rem',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '1.2rem' }}>⚡</span>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                      {getText('severity')}
+                    </div>
+                    <div style={{ fontWeight: 'bold' }}>
+                      {patientData.severity}/10
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Duration */}
+              {patientData.durationLabel && (
+                <div style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  padding: '0.8rem',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '1.2rem' }}>⏰</span>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                      {getText('duration')}
+                    </div>
+                    <div style={{ fontWeight: 'bold' }}>
+                      {patientData.durationLabel}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Symptoms Preview */}
+              {(patientData.symptoms || patientData.selectedSymptomNames) && (
+                <div style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  padding: '0.8rem',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.5rem',
+                  gridColumn: 'span 2'
+                }}>
+                  <span style={{ fontSize: '1.2rem' }}>🔍</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '0.3rem' }}>
+                      {getText('symptoms')}
+                    </div>
+                    <div style={{ fontSize: '0.9rem' }}>
+                      {patientData.selectedSymptomNames && patientData.selectedSymptomNames.length > 0 && (
+                        <div style={{ marginBottom: '0.3rem' }}>
+                          <strong>Selected:</strong> {patientData.selectedSymptomNames.join(', ')}
+                        </div>
+                      )}
+                      {patientData.symptoms && (
+                        <div style={{ opacity: 0.8 }}>
+                          {patientData.symptoms.substring(0, 100)}
+                          {patientData.symptoms.length > 100 ? '...' : ''}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -243,14 +437,16 @@ const ResultsPage = ({ onNavigate }) => {
               transition: 'transform 0.2s ease',
               cursor: 'default'
             }}
-            onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
-            onMouseLeave={(e) => e.target.style.transform = 'translateY(0px)'}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0px)'}
             >
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: '0.8rem'
+                marginBottom: '0.8rem',
+                flexWrap: 'wrap',
+                gap: '0.5rem'
               }}>
                 <h3 style={{ margin: 0, fontSize: '1.2rem' }}>
                   {condition.condition}
@@ -377,39 +573,36 @@ const ResultsPage = ({ onNavigate }) => {
             🏥 {getText('findProviders')}
           </button>
           
-       
-
-        <button
-          onClick={() => onNavigate('chat')}
-          style={{
-            background: 'linear-gradient(135deg, #2196F3, #1976D2)',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '1rem 1.5rem',
-            color: 'white',
-            fontSize: '1rem',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.5rem'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.transform = 'translateY(-2px)';
-            e.target.style.boxShadow = '0 8px 25px rgba(33, 150, 243, 0.3)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.transform = 'translateY(0)';
-            e.target.style.boxShadow = 'none';
-          }}
-        >
-          <span style={{ fontSize: '1.2rem' }}>💬</span>
-          {getText('chatForInfo')}
-        </button>
-
-
+          <button
+            onClick={() => onNavigate('chat')}
+            style={{
+              background: 'linear-gradient(135deg, #2196F3, #1976D2)',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '1.2rem',
+              color: 'white',
+              fontSize: '1.1rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              boxShadow: '0 4px 15px rgba(33, 150, 243, 0.3)'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 8px 25px rgba(33, 150, 243, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 4px 15px rgba(33, 150, 243, 0.3)';
+            }}
+          >
+            <span style={{ fontSize: '1.2rem' }}>💬</span>
+            {getText('chatForInfo')}
+          </button>
         </div>
 
         {/* Navigation Controls */}
@@ -417,7 +610,8 @@ const ResultsPage = ({ onNavigate }) => {
           display: 'flex',
           justifyContent: 'center',
           gap: '1rem',
-          marginBottom: '2rem'
+          marginBottom: '2rem',
+          flexWrap: 'wrap'
         }}>
           <button
             onClick={() => onNavigate('symptom-input')}

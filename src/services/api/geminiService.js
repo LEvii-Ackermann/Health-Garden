@@ -98,10 +98,11 @@ class GeminiService {
 
     // Age-based severity thresholds
     const ageThresholds = {
-      '18-30': 8,
-      '31-50': 7,
-      '51-65': 6,
-      '65+': 6
+      '0-12': 6,
+      '13-19': 7,
+      '20-39': 8,
+      '40-59': 7,
+      '60+': 6
     };
 
     const threshold = ageThresholds[ageGroup] || 7;
@@ -311,28 +312,55 @@ class GeminiService {
     }
   }
 
+  // FIXED: Updated to use correct demographic field names and add age/gender-specific context
   buildMedicalPrompt(patientData) {
-    const { symptoms, severity, duration, age, gender, location } = patientData;
+    const { 
+      symptoms, 
+      severity, 
+      duration, 
+      durationLabel,
+      ageGroup, 
+      ageGroupLabel,
+      gender, 
+      location,
+      selectedSymptomNames,
+      emergencyContact 
+    } = patientData;
+    
+    // Format selected symptoms for display
+    const selectedSymptomsText = selectedSymptomNames && selectedSymptomNames.length > 0 
+      ? `\n- Selected Symptoms: ${selectedSymptomNames.join(', ')}`
+      : '';
     
     return `You are a medical AI assistant providing preliminary health information. You must:
 1. Never provide definitive diagnoses - only suggest possible conditions
 2. Always recommend consulting healthcare professionals
-3. Provide structured, helpful information
+3. Provide structured, helpful information tailored to the patient's age and gender
 4. Use appropriate medical terminology
-5. Assess urgency levels appropriately
+5. Assess urgency levels appropriately based on demographics
 6. Return responses in valid JSON format
+7. Consider age-specific conditions and gender-specific health concerns
 
 IMPORTANT: This is for informational purposes only and should not replace professional medical advice.
 
 Please analyze the following patient information:
 
-Patient Information:
-- Age Group: ${age || 'Not specified'}
-- Gender: ${gender || 'Not specified'}  
+PATIENT DEMOGRAPHIC PROFILE:
+- Age Group: ${ageGroupLabel || ageGroup || 'Not specified'} ${ageGroup ? `(${ageGroup})` : ''}
+- Gender: ${this.formatGenderForPrompt(gender)}
 - Location: ${location || 'Not specified'}
-- Symptoms: ${symptoms}
-- Severity: ${severity}/10
-- Duration: ${duration}
+- Emergency Contact Available: ${emergencyContact ? 'Yes' : 'No'}
+
+SYMPTOM INFORMATION:
+- Primary Symptoms Described: ${symptoms || 'Not specified'}${selectedSymptomsText}
+- Pain/Discomfort Severity: ${severity}/10
+- Symptom Duration: ${durationLabel || duration || 'Not specified'}
+
+AGE-SPECIFIC CONSIDERATIONS TO ANALYZE:
+${this.getAgeSpecificGuidance(ageGroup)}
+
+GENDER-SPECIFIC CONSIDERATIONS TO ANALYZE:
+${this.getGenderSpecificGuidance(gender, ageGroup)}
 
 Please provide your response in the following JSON format only (no additional text):
 
@@ -340,32 +368,121 @@ Please provide your response in the following JSON format only (no additional te
   "urgencyLevel": "low|moderate|high|emergency",
   "possibleConditions": [
     {
-      "condition": "Condition name",
+      "condition": "Condition name (consider age and gender relevance)",
       "probability": 85,
-      "description": "Brief description of condition"
+      "description": "Brief description explaining why this condition is considered for this patient's demographic profile"
     }
   ],
   "recommendations": [
     {
-      "action": "Specific recommended action",
+      "action": "Specific age-appropriate and gender-relevant recommended action",
       "priority": "high|medium|low"
     }
   ],
   "whenToSeekHelp": [
-    "Warning sign requiring immediate attention",
-    "Another warning sign"
+    "Age-specific warning sign requiring immediate attention",
+    "Another demographic-relevant warning sign"
   ],
   "disclaimer": "Important medical disclaimer text"
 }
 
-Consider these factors in your analysis:
-1. Symptom severity (${severity}/10) and duration (${duration})
-2. Age-appropriate conditions for ${age || 'unspecified age'}
-3. Urgency assessment based on symptom combination
-4. Appropriate recommendations for the severity level
-5. Clear warning signs for when to seek immediate care
+ANALYSIS REQUIREMENTS:
+1. Symptom severity (${severity}/10) and duration (${durationLabel || duration})
+2. Age-appropriate conditions for ${ageGroupLabel || ageGroup || 'unspecified age'}
+3. Gender-specific health considerations for ${this.formatGenderForPrompt(gender)}
+4. Urgency assessment based on symptom combination AND patient demographics
+5. Age-appropriate recommendations (e.g., different for children vs elderly)
+6. Clear warning signs tailored to this age group and gender
+7. Consider that ${ageGroup === '0-12' ? 'children' : ageGroup === '13-19' ? 'adolescents' : ageGroup === '60+' ? 'older adults' : 'adults'} may present symptoms differently
 
-Provide helpful, accurate information while emphasizing the need for professional medical consultation. Return only valid JSON without any additional formatting or text.`;
+Provide helpful, accurate, and demographically-aware information while emphasizing the need for professional medical consultation. Return only valid JSON without any additional formatting or text.`;
+  }
+
+  // Helper to format gender for AI prompt
+  formatGenderForPrompt(gender) {
+    const genderMap = {
+      'male': 'Male',
+      'female': 'Female',
+      'other': 'Other/Non-binary',
+      'prefer-not-to-say': 'Not specified'
+    };
+    return genderMap[gender] || 'Not specified';
+  }
+
+  // Get age-specific guidance for AI analysis
+  getAgeSpecificGuidance(ageGroup) {
+    const ageGuidance = {
+      '0-12': `- Pediatric conditions common in children
+- Developmental stages and growth-related issues
+- Different symptom presentation in children (may not articulate symptoms well)
+- Higher concern for dehydration and fever in young children
+- Consider common childhood illnesses (viral infections, etc.)
+- Parents/guardians should be involved in all medical decisions`,
+      
+      '13-19': `- Adolescent health concerns and hormonal changes
+- Growth spurts and puberty-related issues
+- Mental health considerations common in teens
+- Sports injuries and activity-related conditions
+- Academic stress-related symptoms
+- Transition from pediatric to adult healthcare considerations`,
+      
+      '20-39': `- Young adult lifestyle factors (work stress, exercise, diet)
+- Reproductive health considerations
+- Early signs of chronic conditions
+- Mental health and anxiety-related symptoms
+- Work-life balance health impacts
+- Preventive health screening recommendations`,
+      
+      '40-59': `- Middle-age health considerations
+- Increased risk for chronic conditions (diabetes, hypertension, heart disease)
+- Hormonal changes (perimenopause/menopause for females, andropause for males)
+- Age-related changes in metabolism and body composition
+- Stress-related health impacts
+- Importance of regular health screenings`,
+      
+      '60+': `- Senior health considerations and age-related conditions
+- Multiple comorbidities more common
+- Medication interactions and polypharmacy concerns
+- Fall risk and mobility issues
+- Cognitive health considerations
+- Different symptom presentation (may be atypical)
+- Greater vulnerability to complications
+- Importance of regular medical monitoring`
+    };
+    
+    return ageGuidance[ageGroup] || `- General adult health considerations
+- Lifestyle and occupational factors
+- Chronic disease screening recommendations`;
+  }
+
+  // Get gender-specific guidance for AI analysis
+  getGenderSpecificGuidance(gender, ageGroup) {
+    if (gender === 'male') {
+      return `- Male-specific health conditions to consider
+- Cardiovascular risk factors more prevalent in males
+- Prostate health (for adult males)
+- Male-pattern symptom presentation
+- Testosterone-related health factors (if age-appropriate)
+- Men's mental health considerations`;
+    } else if (gender === 'female') {
+      const femaleGuidance = `- Female-specific health conditions to consider
+- Reproductive health considerations
+- Hormonal cycle impacts on symptoms
+- Female-pattern symptom presentation`;
+      
+      if (ageGroup === '13-19' || ageGroup === '20-39' || ageGroup === '40-59') {
+        return femaleGuidance + `
+- Menstrual cycle-related symptoms
+- Pregnancy-related considerations (if age-appropriate)
+- Contraception and reproductive planning impacts
+${ageGroup === '40-59' ? '- Perimenopause and menopause symptoms\n- Hormonal transition health impacts' : ''}`;
+      }
+      return femaleGuidance;
+    } else {
+      return `- General health considerations applicable to all genders
+- Inclusive approach to symptom analysis
+- No gender-specific assumptions in diagnosis`;
+    }
   }
 
   // Build chat prompt for follow-up questions
@@ -374,8 +491,10 @@ Provide helpful, accurate information while emphasizing the need for professiona
 Previous Analysis Context:
 - Patient's reported symptoms: ${context.symptoms}
 - Severity level: ${context.severity}/10
-- Duration: ${context.duration}
-- Age group: ${context.age}
+- Duration: ${context.durationLabel || context.duration}
+- Age group: ${context.ageGroupLabel || context.ageGroup || 'Not specified'}
+- Gender: ${context.gender || 'Not specified'}
+- Location: ${context.location || 'Not specified'}
 - Previous analysis showed possible conditions: ${context.previousAnalysis?.map(c => c.condition).join(', ') || 'Not available'}
 ` : '';
 
@@ -388,12 +507,13 @@ User's Current Question: "${userMessage}"
 Please provide a helpful, medically responsible response that:
 - Addresses their specific question about their health analysis
 - Provides educational information when appropriate
+- Considers their age group and gender when relevant to the question
 - Always emphasizes the importance of consulting healthcare professionals for medical decisions
 - Is supportive and empathetic
 - Keeps responses concise but informative (2-3 paragraphs maximum)
 - Avoids providing definitive medical diagnoses
-- References their previous analysis when relevant
-- Uses simple, understandable language
+- References their previous analysis and demographics when relevant
+- Uses simple, understandable language appropriate for their age group
 
 IMPORTANT GUIDELINES:
 - Never recommend specific medications without professional consultation
@@ -401,6 +521,7 @@ IMPORTANT GUIDELINES:
 - Provide general health education and guidance
 - Be supportive but medically responsible
 - If asked about emergency symptoms, immediately recommend seeking urgent care
+- Tailor advice to be age-appropriate and gender-sensitive when relevant
 
 Remember: This is for informational purposes only and should not replace professional medical consultation.`;
   }
@@ -551,9 +672,9 @@ Remember: This is for informational purposes only and should not replace profess
     return "I understand your concern about your health. While I can provide general health information based on your previous analysis, every person's situation is unique. For personalized medical advice, proper diagnosis, and treatment recommendations, I strongly encourage you to consult with a qualified healthcare professional who can properly evaluate your specific condition and circumstances. They can provide guidance tailored to your individual needs and medical history.";
   }
 
+  // FIXED: Enhanced mock response with demographic awareness
   getMockResponse(patientData) {
-    // Enhanced mock response based on actual symptoms
-    const { symptoms, severity, duration } = patientData;
+    const { symptoms, severity, duration, ageGroup, ageGroupLabel, gender } = patientData;
     
     let urgencyLevel = 'moderate';
     let conditions = [];
@@ -571,22 +692,22 @@ Remember: This is for informational purposes only and should not replace profess
         {
           condition: 'Requires Immediate Medical Attention',
           probability: 90,
-          description: 'High severity symptoms require professional evaluation without delay'
+          description: `High severity symptoms in ${ageGroupLabel || 'your age group'} require professional evaluation without delay`
         }
       ];
     } 
-    // Common symptoms
+    // Common symptoms with age/gender context
     else if (symptomLower.includes('headache')) {
       conditions = [
         {
           condition: 'Tension Headache',
           probability: 75,
-          description: 'Common headache potentially related to stress, dehydration, or tension'
+          description: `Common headache potentially related to stress, dehydration, or tension. ${ageGroup === '13-19' ? 'Common in teens due to academic stress or screen time.' : ageGroup === '40-59' ? 'May be related to work stress or vision changes common in this age group.' : ''}`
         },
         {
           condition: 'Migraine',
           probability: 45,
-          description: 'Severe headache that may include sensitivity to light or sound'
+          description: `Severe headache that may include sensitivity to light or sound${gender === 'female' ? ', which can be influenced by hormonal changes' : ''}`
         }
       ];
     } 
@@ -595,55 +716,76 @@ Remember: This is for informational purposes only and should not replace profess
         {
           condition: 'Viral Upper Respiratory Infection',
           probability: 80,
-          description: 'Common cold or flu-like illness affecting the upper respiratory system'
+          description: `Common cold or flu-like illness. ${ageGroup === '0-12' ? 'Children are more susceptible to viral infections.' : ageGroup === '60+' ? 'Older adults should monitor closely as complications are more common.' : 'Common in adults, usually resolves with rest and hydration.'}`
         },
         {
           condition: 'Bacterial Infection',
           probability: 30,
-          description: 'Possible bacterial infection requiring medical evaluation'
+          description: 'Possible bacterial infection requiring medical evaluation if symptoms persist'
         }
       ];
     }
-    // General symptoms
+    // General symptoms with demographic context
     else {
       conditions = [
         {
           condition: 'General Health Concern',
           probability: 65,
-          description: 'Symptoms require medical evaluation for proper diagnosis and treatment plan'
+          description: `Based on your profile (${ageGroupLabel || ageGroup}, ${gender}), symptoms require medical evaluation for proper diagnosis and age-appropriate treatment plan`
         }
       ];
     }
 
+    // Age-specific recommendations
+    let recommendations = [
+      {
+        action: 'Rest and maintain adequate hydration',
+        priority: 'high'
+      },
+      {
+        action: 'Monitor symptoms for changes or worsening',
+        priority: 'medium'
+      }
+    ];
+
+    if (ageGroup === '0-12') {
+      recommendations.push({
+        action: 'Parents/guardians should monitor child closely and consult pediatrician',
+        priority: 'high'
+      });
+    } else if (ageGroup === '60+') {
+      recommendations.push({
+        action: 'Consult healthcare provider promptly as older adults are more vulnerable to complications',
+        priority: 'high'
+      });
+    } else {
+      recommendations.push({
+        action: 'Consult healthcare provider if symptoms persist or worsen',
+        priority: 'high'
+      });
+    }
+
+    recommendations.push({
+      action: 'Avoid strenuous activity until feeling better',
+      priority: 'medium'
+    });
+
     return {
       urgencyLevel,
       possibleConditions: conditions,
-      recommendations: [
-        {
-          action: 'Rest and maintain adequate hydration',
-          priority: 'high'
-        },
-        {
-          action: 'Monitor symptoms for changes or worsening',
-          priority: 'medium'
-        },
-        {
-          action: 'Consult healthcare provider if symptoms persist or worsen',
-          priority: 'high'
-        },
-        {
-          action: 'Avoid strenuous activity until feeling better',
-          priority: 'medium'
-        }
-      ],
+      recommendations,
       whenToSeekHelp: [
         'Symptoms worsen significantly or rapidly',
+        ageGroup === '0-12' ? 'Fever above 100.4°F (38°C) in infants or high fever in children' : 
+        ageGroup === '60+' ? 'Any fever or symptom change (older adults may not show typical fever response)' :
         'Fever above 101°F (38.3°C) that persists',
         'Difficulty breathing or shortness of breath',
         'Severe pain or discomfort',
+        ageGroup === '0-12' ? 'Child appears lethargic or unresponsive' :
+        ageGroup === '60+' ? 'Confusion, dizziness, or falls' :
         'Symptoms persist beyond expected recovery time'
       ],
-      disclaimer: 'This is a mock analysis for demonstration. Please consult with qualified healthcare professionals for actual medical advice and proper diagnosis.'
+      disclaimer: `This is a mock analysis for demonstration. Age group: ${ageGroupLabel || ageGroup}, Gender: ${gender}. Please consult with qualified healthcare professionals for actual medical advice and proper diagnosis tailored to your demographic profile.`
     };
   }
 }

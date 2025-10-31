@@ -8,6 +8,19 @@ const SymptomInput = ({ onNavigate, patientData, updatePatientData }) => {
   const { getCurrentLanguage } = useLanguage();
   const currentLang = getCurrentLanguage();
 
+  // Load existing patient data from localStorage on mount
+  useEffect(() => {
+    const storedPatientData = localStorage.getItem('patientData');
+    if (storedPatientData) {
+      try {
+        const parsed = JSON.parse(storedPatientData);
+        console.log('Loaded patient data in SymptomInput:', parsed);
+      } catch (error) {
+        console.error('Error loading patient data:', error);
+      }
+    }
+  }, []);
+
   // State management - Initialize with existing data
   const [symptomText, setSymptomText] = useState(patientData?.symptoms || '');
   const [selectedSymptoms, setSelectedSymptoms] = useState(patientData?.selectedSymptoms || []);
@@ -17,14 +30,14 @@ const SymptomInput = ({ onNavigate, patientData, updatePatientData }) => {
   const [emergencyDetected, setEmergencyDetected] = useState(null);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   
-  // NEW: Prevent repeated emergency warnings
+  // Prevent repeated emergency warnings
   const [emergencyWarningShown, setEmergencyWarningShown] = useState(false);
   const [lastWarningSymptoms, setLastWarningSymptoms] = useState('');
 
   // Emergency detection timeout
   const emergencyTimeoutRef = useRef(null);
 
-  // Multilingual content
+  // Multilingual content (keeping your existing content structure)
   const content = {
     en: {
       title: "Describe Your Symptoms",
@@ -144,12 +157,10 @@ const SymptomInput = ({ onNavigate, patientData, updatePatientData }) => {
   useEffect(() => {
     const checkForEmergency = async () => {
       if (symptomText.trim() || selectedSymptoms.length > 0) {
-        // Clear previous timeout
         if (emergencyTimeoutRef.current) {
           clearTimeout(emergencyTimeoutRef.current);
         }
 
-        // Set new timeout for 2 seconds after user stops typing
         emergencyTimeoutRef.current = setTimeout(async () => {
           const allSymptoms = [
             symptomText,
@@ -161,15 +172,18 @@ const SymptomInput = ({ onNavigate, patientData, updatePatientData }) => {
 
           if (allSymptoms.trim()) {
             try {
+              // FIXED: Load patient data for emergency detection
+              const storedPatientData = localStorage.getItem('patientData');
+              const basicInfo = storedPatientData ? JSON.parse(storedPatientData) : {};
+              
               const emergency = geminiService.detectEmergency({
                 symptoms: allSymptoms,
                 severity: severity,
                 duration: duration,
-                ageGroup: patientData?.age,
+                ageGroup: basicInfo.ageGroup || patientData?.ageGroup,
                 selectedSymptoms: selectedSymptoms
               });
               
-              // FIXED: Only show modal if emergency detected AND not already shown for these symptoms
               if (emergency.isEmergency && emergency.confidence > 0.7 && !emergencyWarningShown) {
                 setEmergencyDetected(emergency);
                 setShowEmergencyModal(true);
@@ -186,35 +200,29 @@ const SymptomInput = ({ onNavigate, patientData, updatePatientData }) => {
 
     checkForEmergency();
 
-    // Cleanup timeout on unmount
     return () => {
       if (emergencyTimeoutRef.current) {
         clearTimeout(emergencyTimeoutRef.current);
       }
     };
-  }, [symptomText, selectedSymptoms, severity, patientData?.age, currentContent, emergencyWarningShown]);
+  }, [symptomText, selectedSymptoms, severity, patientData?.ageGroup, currentContent, emergencyWarningShown]);
 
-  // Handle symptom text change
   const handleSymptomTextChange = (text) => {
-    // FIXED: Reset emergency warning if user makes significant changes to symptoms
     if (emergencyWarningShown && Math.abs(text.length - symptomText.length) > 10) {
       setEmergencyWarningShown(false);
       setLastWarningSymptoms('');
     }
     
     setSymptomText(text);
-    updatePatientData({ symptoms: text });
+    if (updatePatientData) updatePatientData({ symptoms: text });
   };
 
-  // Handle symptom selection
   const toggleSymptom = (symptomId) => {
     const newSelectedSymptoms = selectedSymptoms.includes(symptomId) 
       ? selectedSymptoms.filter(s => s !== symptomId)
       : [...selectedSymptoms, symptomId];
     
-    // FIXED: Reset emergency warning if user changes selected symptoms significantly
     if (emergencyWarningShown && Math.abs(newSelectedSymptoms.length - selectedSymptoms.length) > 0) {
-      // Check if they're removing emergency symptoms
       const emergencySymptomIds = ['chest-pain', 'breathing'];
       const removedEmergencySymptom = emergencySymptomIds.some(id => 
         selectedSymptoms.includes(id) && !newSelectedSymptoms.includes(id)
@@ -227,67 +235,107 @@ const SymptomInput = ({ onNavigate, patientData, updatePatientData }) => {
     }
     
     setSelectedSymptoms(newSelectedSymptoms);
-    updatePatientData({ selectedSymptoms: newSelectedSymptoms });
+    if (updatePatientData) updatePatientData({ selectedSymptoms: newSelectedSymptoms });
   };
 
-  // Handle severity change
   const handleSeverityChange = (newSeverity) => {
     setSeverity(newSeverity);
-    updatePatientData({ severity: newSeverity });
+    if (updatePatientData) updatePatientData({ severity: newSeverity });
   };
 
-  // Handle duration change
   const handleDurationChange = (newDuration) => {
     setDuration(newDuration);
-    updatePatientData({ duration: newDuration });
+    if (updatePatientData) updatePatientData({ duration: newDuration });
   };
 
-  // Handle emergency modal actions
   const handleEmergencyCall = () => {
     window.open('tel:108');
     setShowEmergencyModal(false);
   };
 
   const handleEmergencyGuidance = () => {
-    // Store emergency data
-    updatePatientData({
-      emergencyDetected: true,
-      emergencyType: emergencyDetected.type,
-      emergencyConfidence: emergencyDetected.confidence
-    });
+    if (updatePatientData) {
+      updatePatientData({
+        emergencyDetected: true,
+        emergencyType: emergencyDetected.type,
+        emergencyConfidence: emergencyDetected.confidence
+      });
+    }
     setShowEmergencyModal(false);
     onNavigate('emergency-triage');
   };
 
-  // FIXED: Don't reset emergency warning when user chooses to continue
   const handleContinueAnalysis = () => {
     setShowEmergencyModal(false);
-    // Keep emergencyWarningShown as true so modal doesn't reappear
   };
 
-  // Handle form submission
+  // FIXED: Handle form submission with merged data
   const handleAnalyze = () => {
-    // Final update to ensure all data is captured
-    const finalSymptomData = {
+    // Load basic information from localStorage
+    const storedPatientData = localStorage.getItem('patientData');
+    let basicInfo = {};
+    
+    if (storedPatientData) {
+      try {
+        basicInfo = JSON.parse(storedPatientData);
+        console.log('Retrieved basic info:', basicInfo);
+      } catch (error) {
+        console.error('Error parsing patient data:', error);
+      }
+    }
+
+    // Get readable duration label
+    const durationLabel = currentContent.duration.options.find(
+      opt => opt.value === duration
+    )?.label || duration;
+
+    // Get readable symptom names
+    const selectedSymptomNames = selectedSymptoms.map(id => {
+      const symptom = currentContent.commonSymptoms.symptoms.find(s => s.id === id);
+      return symptom?.name || id;
+    });
+
+    // FIXED: Merge all data together
+    const completePatientData = {
+      // Basic information
+      ageGroup: basicInfo.ageGroup,
+      ageGroupLabel: basicInfo.ageGroupLabel,
+      age: basicInfo.ageGroupLabel, // For display
+      gender: basicInfo.gender,
+      location: basicInfo.location,
+      emergencyContact: basicInfo.emergencyContact,
+      
+      // Symptom information
       symptoms: symptomText,
-      selectedSymptoms,
-      severity,
-      duration,
+      selectedSymptoms: selectedSymptoms,
+      selectedSymptomNames: selectedSymptomNames,
+      severity: severity,
+      duration: duration,
+      durationLabel: durationLabel,
+      
+      // Metadata
       timestamp: new Date().toISOString(),
       language: currentLang?.code
     };
 
-    // Update the patient data one final time
-    updatePatientData(finalSymptomData);
+    console.log('Complete patient data for analysis:', completePatientData);
+
+    // Store the complete merged data
+    localStorage.setItem('patientData', JSON.stringify(completePatientData));
+    
+    // Update parent component if callback provided
+    if (updatePatientData) {
+      updatePatientData(completePatientData);
+    }
     
     // Navigate to loading/analysis page
     onNavigate('analysis-loading');
   };
 
   const getSeverityColor = (value) => {
-    if (value <= 3) return '#4CAF50'; // Green for mild
-    if (value <= 7) return '#FF9800'; // Orange for moderate  
-    return '#f44336'; // Red for severe
+    if (value <= 3) return '#4CAF50';
+    if (value <= 7) return '#FF9800';
+    return '#f44336';
   };
 
   return (
@@ -377,8 +425,7 @@ const SymptomInput = ({ onNavigate, patientData, updatePatientData }) => {
             <VoiceRecorder
               onRecordingComplete={(audioBlob) => {
                 console.log('Voice recorded:', audioBlob);
-                updatePatientData({ voiceRecording: audioBlob });
-                // You can add speech-to-text conversion here if needed
+                if (updatePatientData) updatePatientData({ voiceRecording: audioBlob });
               }}
               currentContent={currentContent.voiceInput}
             />

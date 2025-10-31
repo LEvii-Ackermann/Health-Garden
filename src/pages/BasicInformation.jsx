@@ -118,8 +118,25 @@ const BasicInformation = ({ onNavigate }) => {
 
   const handleContinue = () => {
     if (validateForm()) {
-      // Store form data in localStorage for later use
-      localStorage.setItem('userBasicInfo', JSON.stringify(formData));
+      // FIXED: Store in patientData (not userBasicInfo) and include readable age label
+      const ageGroupLabel = currentContent.ageGroup.options.find(
+        opt => opt.value === formData.ageGroup
+      )?.label || formData.ageGroup;
+
+      const patientInfo = {
+        ageGroup: formData.ageGroup,
+        ageGroupLabel: ageGroupLabel, // Human-readable age
+        gender: formData.gender,
+        location: formData.location,
+        emergencyContact: formData.emergencyContact,
+        timestamp: new Date().toISOString()
+      };
+
+      // Store with consistent key name
+      localStorage.setItem('patientData', JSON.stringify(patientInfo));
+      
+      console.log('Stored patient data:', patientInfo); // Debug log
+      
       onNavigate('symptom-input');
     }
   };
