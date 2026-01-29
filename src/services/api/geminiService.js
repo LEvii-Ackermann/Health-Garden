@@ -2,12 +2,12 @@
 import axios from 'axios';
 
 // Updated to use the correct model endpoint
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent';
 
 class GeminiService {
   constructor() {
     this.apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    
+    console.log("API Key loaded:", this.apiKey ? "Yes" : "No");
     if (!this.apiKey) {
       console.warn('Gemini API key not found. Using mock responses.');
     }
@@ -275,7 +275,8 @@ class GeminiService {
             temperature: 0.4,
             topK: 32,
             topP: 1,
-            maxOutputTokens: 800,
+            maxOutputTokens: 1000,
+            responseMimeType: "application/json",
           },
           safetySettings: [
             {
@@ -526,25 +527,36 @@ IMPORTANT GUIDELINES:
 Remember: This is for informational purposes only and should not replace professional medical consultation.`;
   }
 
-  parseAIResponse(aiResponse) {
+parseAIResponse(aiResponse) {
+  try {
+    // 1. Clean common AI artifacts
+    let cleanResponse = aiResponse.trim();
+    
+    // 2. Remove Markdown code blocks if the AI ignored the "JSON only" instruction
+    cleanResponse = cleanResponse.replace(/^```json\s*|```\s*$/g, '');
+
+    // 3. Attempt direct parse
+    const parsed = JSON.parse(cleanResponse);
+    return this.validateResponse(parsed);
+    
+  } catch (error) {
+    console.error('Initial JSON parse failed, attempting fallback extraction:', error);
+    
+    // Fallback: Try to find the first '{' and last '}'
     try {
-      // Remove markdown formatting if present
-      let cleanResponse = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-      
-      // Try to extract JSON from the response
-      const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsedResponse = JSON.parse(jsonMatch[0]);
-        return this.validateResponse(parsedResponse);
+      const start = aiResponse.indexOf('{');
+      const end = aiResponse.lastIndexOf('}');
+      if (start !== -1 && end !== -1) {
+        const jsonString = aiResponse.substring(start, end + 1);
+        return this.validateResponse(JSON.parse(jsonString));
       }
-      
-      // If no valid JSON found, create structured response
-      return this.createStructuredResponse(aiResponse);
-    } catch (error) {
-      console.error('Error parsing Gemini response:', error);
-      return this.createDefaultResponse(aiResponse);
+    } catch (fallbackError) {
+      console.error('Final parsing attempt failed:', fallbackError);
     }
+    
+    return this.createDefaultResponse(aiResponse);
   }
+}
 
   validateResponse(response) {
     // Ensure all required fields exist
